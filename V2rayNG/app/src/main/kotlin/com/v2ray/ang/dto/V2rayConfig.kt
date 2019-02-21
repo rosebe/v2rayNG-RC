@@ -2,6 +2,7 @@ package com.v2ray.ang.dto
 
 data class V2rayConfig(
         val log: LogBean,
+        val policy: PolicyBean,
         val inbounds: ArrayList<InboundBean>,
         var outbounds: ArrayList<OutboundBean>,
         var dns: DnsBean,
@@ -18,7 +19,8 @@ data class V2rayConfig(
             val sniffing: SniffingBean) {
 
         data class InSettingsBean(val auth: String,
-                                  val udp: Boolean)
+                                  val udp: Boolean,
+                                  val userLevel: Int)
 
         data class SniffingBean(val enabled: Boolean,
                                 val destOverride: List<String>)
@@ -26,9 +28,9 @@ data class V2rayConfig(
 
     data class OutboundBean(val tag: String,
                             var protocol: String,
-                            var settings: OutSettingsBean,
-                            var streamSettings: StreamSettingsBean,
-                            var mux: MuxBean) {
+                            var settings: OutSettingsBean?,
+                            var streamSettings: StreamSettingsBean?,
+                            var mux: MuxBean?) {
 
         data class OutSettingsBean(var vnext: List<VnextBean>?,
                                    var servers: List<ServersBean>?,
@@ -40,7 +42,8 @@ data class V2rayConfig(
 
                 data class UsersBean(var id: String,
                                      var alterId: Int,
-                                     var security: String)
+                                     var security: String,
+                                     var level: Int)
             }
 
             data class ServersBean(var address: String,
@@ -96,7 +99,9 @@ data class V2rayConfig(
     }
 
     //data class DnsBean(var servers: List<String>)
-    data class DnsBean(var servers: List<Any>) {
+    data class DnsBean(var servers: List<Any>,
+                       var hosts: Map<String, String>?
+    ) {
         data class ServersBean(var address: String = "",
                                var port: Int = 0,
                                var domains: List<String>?)
@@ -105,10 +110,18 @@ data class V2rayConfig(
     data class RoutingBean(var domainStrategy: String,
                            var rules: ArrayList<RulesBean>) {
 
-        data class RulesBean(var type: String,
-                //var port: String,
-                             var ip: ArrayList<String>?,
-                             var domain: ArrayList<String>?,
-                             var outboundTag: String)
+        data class RulesBean(var type: String = "",
+                             var ip: ArrayList<String>? = null,
+                             var domain: ArrayList<String>? = null,
+                             var outboundTag: String = "",
+                             var port: String? = null)
+    }
+
+    data class PolicyBean(var levels: Map<String, LevelBean>) {
+        data class LevelBean(
+                  var handshake: Int? = null,
+                  var connIdle: Int? = null,
+                  var uplinkOnly: Int? = null,
+                  var downlinkOnly: Int? = null)
     }
 }

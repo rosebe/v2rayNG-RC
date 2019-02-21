@@ -19,7 +19,8 @@ import com.v2ray.ang.extension.defaultDPreference
 import org.jetbrains.anko.toast
 import java.net.URLDecoder
 import java.util.*
-
+import java.net.*
+import java.math.BigInteger
 
 object AngConfigManager {
     private lateinit var app: AngApplication
@@ -254,7 +255,7 @@ object AngConfigManager {
                     }
 
                     vmess.configType = AppConfig.EConfigType.Vmess
-                    vmess.security = "chacha20-poly1305"
+                    vmess.security = "auto"
                     vmess.network = "tcp"
                     vmess.headerType = "none"
 
@@ -295,20 +296,17 @@ object AngConfigManager {
                     result = Utils.decode(result)
                 }
 
-                val arr1 = result.split('@')
-                if (arr1.count() != 2) {
+                val legacyPattern = "^(.+?):(.*)@(.+?):(\\d+?)$".toRegex()
+                val match = legacyPattern.matchEntire(result)
+                if (match == null) {
                     return R.string.toast_incorrect_protocol
                 }
-                val arr21 = arr1[0].split(':')
-                val arr22 = arr1[1].split(':')
-                if (arr21.count() != 2 || arr21.count() != 2) {
-                    return R.string.toast_incorrect_protocol
-                }
-
-                vmess.address = arr22[0]
-                vmess.port = Utils.parseInt(arr22[1])
-                vmess.security = arr21[0]
-                vmess.id = arr21[1]
+                vmess.security = match.groupValues[1].toLowerCase()
+                vmess.id = match.groupValues[2]
+                vmess.address = match.groupValues[3]
+                if (vmess.address.firstOrNull() == '[' &&  vmess.address.lastOrNull() == ']')
+                    vmess.address = vmess.address.substring(1, vmess.address.length - 1)
+                vmess.port = match.groupValues[4].toInt()
                 vmess.subid = subid
 
                 addShadowsocksServer(vmess, -1)

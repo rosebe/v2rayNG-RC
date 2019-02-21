@@ -98,6 +98,11 @@ object V2rayConfigUtil {
             val guid = vmess.guid
             val jsonConfig = app.defaultDPreference.getPrefString(AppConfig.ANG_CONFIG + guid, "")
 
+            val domainName = parseDomainName(jsonConfig)
+            if (!TextUtils.isEmpty(domainName)) {
+                app.defaultDPreference.setPrefString(AppConfig.PREF_CURR_CONFIG_DOMAIN, domainName)
+            }
+
             result.status = true
             result.content = jsonConfig
             return result
@@ -142,19 +147,20 @@ object V2rayConfigUtil {
 
             when (vmess.configType) {
                 AppConfig.EConfigType.Vmess -> {
-                    outbound.settings.servers = null
+                    outbound.settings?.servers = null
 
-                    val vnext = v2rayConfig.outbounds[0].settings.vnext?.get(0)
+                    val vnext = v2rayConfig.outbounds[0].settings?.vnext?.get(0)
                     vnext?.address = vmess.address
                     vnext?.port = vmess.port
                     val user = vnext?.users?.get(0)
                     user?.id = vmess.id
                     user?.alterId = vmess.alterId
                     user?.security = vmess.security
+                    user?.level = 8
 
                     //Mux
                     val muxEnabled = false//app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_MUX_ENABLED, false)
-                    outbound.mux.enabled = muxEnabled
+                    outbound.mux?.enabled = muxEnabled
 
                     //远程服务器底层传输配置
                     outbound.streamSettings = boundStreamSettings(vmess)
@@ -162,18 +168,18 @@ object V2rayConfigUtil {
                     outbound.protocol = "vmess"
                 }
                 AppConfig.EConfigType.Shadowsocks -> {
-                    outbound.settings.vnext = null
+                    outbound.settings?.vnext = null
 
-                    val server = outbound.settings.servers?.get(0)
+                    val server = outbound.settings?.servers?.get(0)
                     server?.address = vmess.address
                     server?.method = vmess.security
                     server?.ota = false
                     server?.password = vmess.id
                     server?.port = vmess.port
-                    server?.level = 1
+                    server?.level = 8
 
                     //Mux
-                    outbound.mux.enabled = false
+                    outbound.mux?.enabled = false
 
                     outbound.protocol = "shadowsocks"
                 }
@@ -288,6 +294,7 @@ object V2rayConfigUtil {
      */
     private fun routing(vmess: VmessBean, v2rayConfig: V2rayConfig, app: AngApplication): Boolean {
         try {
+            routingUserRule("google", AppConfig.TAG_AGENT, v2rayConfig)
             routingUserRule(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_AGENT, ""), AppConfig.TAG_AGENT, v2rayConfig)
             routingUserRule(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_DIRECT, ""), AppConfig.TAG_DIRECT, v2rayConfig)
             routingUserRule(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_BLOCKED, ""), AppConfig.TAG_BLOCKED, v2rayConfig)
@@ -320,7 +327,7 @@ object V2rayConfigUtil {
             if (!TextUtils.isEmpty(code)) {
                 //IP
                 if (ipOrDomain == "ip" || ipOrDomain == "") {
-                    val rulesIP = V2rayConfig.RoutingBean.RulesBean("", null, null, "")
+                    val rulesIP = V2rayConfig.RoutingBean.RulesBean()
                     rulesIP.type = "field"
                     rulesIP.outboundTag = tag
                     rulesIP.ip = ArrayList<String>()
@@ -330,7 +337,7 @@ object V2rayConfigUtil {
 
                 if (ipOrDomain == "domain" || ipOrDomain == "") {
                     //Domain
-                    val rulesDomain = V2rayConfig.RoutingBean.RulesBean("", null, null, "")
+                    val rulesDomain = V2rayConfig.RoutingBean.RulesBean()
                     rulesDomain.type = "field"
                     rulesDomain.outboundTag = tag
                     rulesDomain.domain = ArrayList<String>()
@@ -347,13 +354,13 @@ object V2rayConfigUtil {
         try {
             if (!TextUtils.isEmpty(userRule)) {
                 //Domain
-                val rulesDomain = V2rayConfig.RoutingBean.RulesBean("", null, null, "")
+                val rulesDomain = V2rayConfig.RoutingBean.RulesBean()
                 rulesDomain.type = "field"
                 rulesDomain.outboundTag = tag
                 rulesDomain.domain = ArrayList<String>()
 
                 //IP
-                val rulesIP = V2rayConfig.RoutingBean.RulesBean("", null, null, "")
+                val rulesIP = V2rayConfig.RoutingBean.RulesBean()
                 rulesIP.type = "field"
                 rulesIP.outboundTag = tag
                 rulesIP.ip = ArrayList<String>()
@@ -363,11 +370,13 @@ object V2rayConfigUtil {
                         .forEach {
                             if (Utils.isIpAddress(it) || it.startsWith("geoip:")) {
                                 rulesIP.ip?.add(it)
-                            } else if (Utils.isValidUrl(it)
-                                    || it.startsWith("geosite:")
-                                    || it.startsWith("regexp:")
-                                    || it.startsWith("domain:")
-                                    || it.startsWith("full:")) {
+                            } else if (it.isNotBlank() || it.isNotEmpty())
+//                                if (Utils.isValidUrl(it)
+//                                    || it.startsWith("geosite:")
+//                                    || it.startsWith("regexp:")
+//                                    || it.startsWith("domain:")
+//                                    || it.startsWith("full:"))
+                            {
                                 rulesDomain.domain?.add(it)
                             }
                         }
@@ -383,30 +392,77 @@ object V2rayConfigUtil {
         }
     }
 
+    private fun userRule2Domian(userRule: String) : ArrayList<String> {
+        val domain = ArrayList<String>()
+        userRule.trim().replace("\n", "").split(",").forEach {
+            if ((it.startsWith("geosite:") || it.startsWith("domain:")) &&
+                 it.isNotBlank() && it.isNotEmpty()) {
+                domain.add(it)
+            }
+        }
+        return domain
+    }
+
     /**
      * Custom Dns
      */
     private fun customDns(vmess: VmessBean, v2rayConfig: V2rayConfig, app: AngApplication): Boolean {
         try {
+            val hosts = mutableMapOf<String, String>()
             val servers = ArrayList<Any>()
             val dns = Utils.getRemoteDnsServers(app.defaultDPreference)
             dns.forEach {
                 servers.add(it)
             }
-//            val localDns = app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)
-//            if (localDns) {
-//                val serverLoc = V2rayConfig.DnsBean.ServersBean("127.0.0.1", 8053, null)
-//                servers.add(serverLoc)
-//            } else {
-//                val dns = Utils.getRemoteDnsServers(app.defaultDPreference)
-//                dns.forEach {
-//                    servers.add(it)
-//                }
-//                //val server = V2rayConfig.DnsBean.ServersBean("223.5.5.5", 53, arrayListOf("geosite:cn"))
-//                //servers.add(server)
-//            }
 
-            v2rayConfig.dns = V2rayConfig.DnsBean(servers)
+            val agDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_AGENT, ""))
+            if (agDomain.size > 0) {
+                servers.add(V2rayConfig.DnsBean.ServersBean("1.1.1.1", 53, agDomain))
+            }
+
+            val dirDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_DIRECT, ""))
+            if (dirDomain.size > 0) {
+                servers.add(V2rayConfig.DnsBean.ServersBean("223.5.5.5", 53, dirDomain))
+            }
+
+            val routingMode = app.defaultDPreference.getPrefString(SettingsActivity.PREF_ROUTING_MODE, "0")
+            if (routingMode == "2" || routingMode == "3") {
+                servers.add(V2rayConfig.DnsBean.ServersBean("223.5.5.5", 53, arrayListOf("geosite:cn")))
+            }
+
+            val blkDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_BLOCKED, ""))
+            if (blkDomain.size > 0) {
+                hosts.putAll(blkDomain.map{ it to "127.0.0.1" })
+            }
+
+            // hardcode googleapi rule to fix play store problems
+            hosts.put("domain:googleapis.cn", "googleapis.com")
+
+            v2rayConfig.dns = V2rayConfig.DnsBean(
+                    servers = servers,
+                    hosts = hosts)
+
+            // DNS outbound对象
+            if (v2rayConfig.outbounds.none { e -> e.protocol == "dns" && e.tag == "dns-out" }) {
+                val dnsOutbound = V2rayConfig.OutboundBean(
+                        protocol = "dns",
+                        tag = "dns-out",
+                        settings = null,
+                        streamSettings = null,
+                        mux = null)
+
+                v2rayConfig.outbounds.add(dnsOutbound)
+            }
+
+            // DNS Reroute to v2ray inner DNS
+            val rdnsRule = V2rayConfig.RoutingBean.RulesBean(
+                    type = "field",
+                    outboundTag = "dns-out",
+                    port = "53",
+                    ip = arrayListOf<String>("26.26.26.2"),
+                    domain = null)
+            v2rayConfig.routing.rules.add(0, rdnsRule)
+
         } catch (e: Exception) {
             e.printStackTrace()
             return false
@@ -427,5 +483,57 @@ object V2rayConfigUtil {
         } catch (e: JSONException) {
             return false
         }
+    }
+
+    private fun parseDomainName(jsonConfig: String): String {
+        try {
+            val jObj = JSONObject(jsonConfig)
+            var domainName = ""
+            if (jObj.has("outbound")) {
+                domainName = parseDomainName(jObj.optJSONObject("outbound"))
+                if (!TextUtils.isEmpty(domainName)) {
+                    return domainName
+                }
+            }
+            if (jObj.has("outbounds")) {
+                for (i in 0..(jObj.optJSONArray("outbounds").length() - 1)) {
+                    domainName = parseDomainName(jObj.optJSONArray("outbounds").getJSONObject(i))
+                    if (!TextUtils.isEmpty(domainName)) {
+                        return domainName
+                    }
+                }
+            }
+            if (jObj.has("outboundDetour")) {
+                for (i in 0..(jObj.optJSONArray("outboundDetour").length() - 1)) {
+                    domainName = parseDomainName(jObj.optJSONArray("outboundDetour").getJSONObject(i))
+                    if (!TextUtils.isEmpty(domainName)) {
+                        return domainName
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return ""
+    }
+
+    private fun parseDomainName(outbound: JSONObject): String {
+        try {
+            if (outbound.has("settings")
+                    || outbound.optJSONObject("settings").has("vnext")) {
+                val vnext = outbound.optJSONObject("settings").optJSONArray("vnext")
+                for (i in 0..(vnext.length() - 1)) {
+                    val item = vnext.getJSONObject(i)
+                    val address = item.getString("address")
+                    val port = item.getString("port")
+                    if (!Utils.isIpAddress(address)) {
+                        return String.format("%s:%s", address, port)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return ""
     }
 }
