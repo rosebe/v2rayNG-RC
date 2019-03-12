@@ -85,8 +85,14 @@
     <string name="title_pref_speed_enabled">啟用速度顯示</string>
     <string name="summary_pref_speed_enabled">在通知中顯示當前速度</string>
 
+    <string name="title_pref_sniffing_enabled">啟用流量探測</string>
+    <string name="summary_pref_sniffing_enabled">流量探測</string>
+
     <string name="title_pref_local_dns_enabled">啟用本地DNS</string>
-    <string name="summary_pref_local_dns_enabled">overture(DNS端口:8053)</string>
+    <string name="summary_pref_local_dns_enabled">DNS請求由本地的v2ray core處理（測試）</string>
+
+    <string name="title_pref_forward_ipv6">轉發IPv6數據</string>
+    <string name="summary_pref_forward_ipv6">VPN接口增加IPv6 ULA地址以及默認路由（測試）</string>
 
     <string name="title_pref_routing_domain_strategy">域名策略</string>
     <string name="title_pref_routing">路由模式</string>
@@ -96,7 +102,7 @@
     <string name="summary_pref_donate">向開發人員捐款</string>
     <string name="donate_detail">新增一些實驗性進階功能</string>
 
-    <string name="title_pref_remote_dns">DNS(可选)</string>
+    <string name="title_pref_remote_dns">遠端DNS (可选)</string>
     <string name="summary_pref_remote_dns">DNS</string>
 
     <string name="title_pref_socks_port">SOCKS5代理端口</string>
@@ -112,6 +118,8 @@
     <string name="summary_pref_feedback">回饋提升或前往 GitHub 回報 Bug</string>
     <string name="summary_pref_tg_group">加入Telegram Group</string>
     <string name="toast_tg_app_not_found">未找到Telegram app</string>
+
+    <string name="title_pref_promotion">贊助推廣</string>
 
     <string name="title_pref_version">版本</string>
 

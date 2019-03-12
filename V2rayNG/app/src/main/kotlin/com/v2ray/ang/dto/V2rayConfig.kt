@@ -1,6 +1,7 @@
 package com.v2ray.ang.dto
 
 data class V2rayConfig(
+        val stats: Any?=null,
         val log: LogBean,
         val policy: PolicyBean,
         val inbounds: ArrayList<InboundBean>,
@@ -13,6 +14,7 @@ data class V2rayConfig(
                        val loglevel: String)
 
     data class InboundBean(
+            var tag: String,
             var port: Int,
             var protocol: String,
             val settings: InSettingsBean,
@@ -22,7 +24,7 @@ data class V2rayConfig(
                                   val udp: Boolean,
                                   val userLevel: Int)
 
-        data class SniffingBean(val enabled: Boolean,
+        data class SniffingBean(var enabled: Boolean,
                                 val destOverride: List<String>)
     }
 
@@ -99,8 +101,8 @@ data class V2rayConfig(
     }
 
     //data class DnsBean(var servers: List<String>)
-    data class DnsBean(var servers: List<Any>,
-                       var hosts: Map<String, String>?
+    data class DnsBean(var servers: List<Any>?=null,
+                       var hosts: Map<String, String>?=null
     ) {
         data class ServersBean(var address: String = "",
                                var port: Int = 0,
@@ -117,7 +119,8 @@ data class V2rayConfig(
                              var port: String? = null)
     }
 
-    data class PolicyBean(var levels: Map<String, LevelBean>) {
+    data class PolicyBean(var levels: Map<String, LevelBean>,
+                            var system: Any?=null) {
         data class LevelBean(
                   var handshake: Int? = null,
                   var connIdle: Int? = null,

@@ -7,6 +7,7 @@ import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.AngConfig.VmessBean
 import com.v2ray.ang.dto.V2rayConfig
+import com.v2ray.ang.extension.defaultDPreference
 import com.v2ray.ang.ui.SettingsActivity
 import org.json.JSONArray
 import org.json.JSONException
@@ -75,7 +76,11 @@ object V2rayConfigUtil {
 
             routing(vmess, v2rayConfig, app)
 
-            customDns(vmess, v2rayConfig, app)
+            if(app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)) {
+                customLocalDns(vmess, v2rayConfig, app)
+            } else {
+                customRemoteDns(vmess, v2rayConfig, app)
+            }
 
             val finalConfig = Gson().toJson(v2rayConfig)
 
@@ -131,6 +136,8 @@ object V2rayConfigUtil {
 //                httpCopy.protocol = "http"
 //                v2rayConfig.inbounds.add(httpCopy)
 //            }
+            v2rayConfig.inbounds[0].sniffing.enabled = app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_SNIFFING_ENABLED, true)
+
         } catch (e: Exception) {
             e.printStackTrace()
             return false
@@ -294,7 +301,6 @@ object V2rayConfigUtil {
      */
     private fun routing(vmess: VmessBean, v2rayConfig: V2rayConfig, app: AngApplication): Boolean {
         try {
-            routingUserRule("google", AppConfig.TAG_AGENT, v2rayConfig)
             routingUserRule(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_AGENT, ""), AppConfig.TAG_AGENT, v2rayConfig)
             routingUserRule(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_DIRECT, ""), AppConfig.TAG_DIRECT, v2rayConfig)
             routingUserRule(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_BLOCKED, ""), AppConfig.TAG_BLOCKED, v2rayConfig)
@@ -392,11 +398,11 @@ object V2rayConfigUtil {
         }
     }
 
-    private fun userRule2Domian(userRule: String) : ArrayList<String> {
+    private fun userRule2Domian(userRule: String): ArrayList<String> {
         val domain = ArrayList<String>()
         userRule.trim().replace("\n", "").split(",").forEach {
             if ((it.startsWith("geosite:") || it.startsWith("domain:")) &&
-                 it.isNotBlank() && it.isNotEmpty()) {
+                    it.isNotBlank() && it.isNotEmpty()) {
                 domain.add(it)
             }
         }
@@ -406,7 +412,7 @@ object V2rayConfigUtil {
     /**
      * Custom Dns
      */
-    private fun customDns(vmess: VmessBean, v2rayConfig: V2rayConfig, app: AngApplication): Boolean {
+    private fun customLocalDns(vmess: VmessBean, v2rayConfig: V2rayConfig, app: AngApplication): Boolean {
         try {
             val hosts = mutableMapOf<String, String>()
             val servers = ArrayList<Any>()
@@ -417,22 +423,22 @@ object V2rayConfigUtil {
 
             val agDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_AGENT, ""))
             if (agDomain.size > 0) {
-                servers.add(V2rayConfig.DnsBean.ServersBean("1.1.1.1", 53, agDomain))
+                servers.add(V2rayConfig.DnsBean.ServersBean(AppConfig.DNS_AGENT, 53, agDomain))
             }
 
             val dirDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_DIRECT, ""))
             if (dirDomain.size > 0) {
-                servers.add(V2rayConfig.DnsBean.ServersBean("223.5.5.5", 53, dirDomain))
+                servers.add(V2rayConfig.DnsBean.ServersBean(AppConfig.DNS_DIRECT, 53, dirDomain))
             }
 
             val routingMode = app.defaultDPreference.getPrefString(SettingsActivity.PREF_ROUTING_MODE, "0")
             if (routingMode == "2" || routingMode == "3") {
-                servers.add(V2rayConfig.DnsBean.ServersBean("223.5.5.5", 53, arrayListOf("geosite:cn")))
+                servers.add(V2rayConfig.DnsBean.ServersBean(AppConfig.DNS_DIRECT, 53, arrayListOf("geosite:cn")))
             }
 
             val blkDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_BLOCKED, ""))
             if (blkDomain.size > 0) {
-                hosts.putAll(blkDomain.map{ it to "127.0.0.1" })
+                hosts.putAll(blkDomain.map { it to "127.0.0.1" })
             }
 
             // hardcode googleapi rule to fix play store problems
@@ -461,6 +467,15 @@ object V2rayConfigUtil {
                     port = "53",
                     ip = arrayListOf<String>("26.26.26.2"),
                     domain = null)
+
+            val ldnsRule = V2rayConfig.RoutingBean.RulesBean(
+                    type = "field",
+                    outboundTag = AppConfig.TAG_DIRECT,
+                    port = "53",
+                    ip = arrayListOf<String>(AppConfig.DNS_DIRECT),
+                    domain = null)
+
+            v2rayConfig.routing.rules.add(0, ldnsRule)
             v2rayConfig.routing.rules.add(0, rdnsRule)
 
         } catch (e: Exception) {
@@ -470,6 +485,23 @@ object V2rayConfigUtil {
         return true
     }
 
+    /**
+     * Custom Remote Dns
+     */
+    private fun customRemoteDns(vmess: VmessBean, v2rayConfig: V2rayConfig, app: AngApplication): Boolean {
+        try {
+            val servers = ArrayList<Any>()
+            Utils.getRemoteDnsServers(app.defaultDPreference).forEach {
+                servers.add(it)
+            }
+
+            v2rayConfig.dns = V2rayConfig.DnsBean(servers = servers)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
+        return true
+    }
     /**
      * is valid config
      */

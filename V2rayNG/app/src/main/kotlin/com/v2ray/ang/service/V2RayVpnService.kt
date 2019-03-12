@@ -84,24 +84,35 @@ class V2RayVpnService : VpnService() {
         // If the old interface has exactly the same parameters, use it!
         // Configure a builder while parsing the parameters.
         val builder = Builder()
+        val enableLocalDns = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)
+        val forwardIpv6 = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_FORWARD_IPV6, false)
 
         parameters.split(" ")
                 .map { it.split(",") }
                 .forEach {
                     when (it[0][0]) {
                         'm' -> builder.setMtu(java.lang.Short.parseShort(it[1]).toInt())
-                        'a' -> builder.addAddress(it[1], Integer.parseInt(it[2]))
-                        'r' -> builder.addRoute(it[1], Integer.parseInt(it[2]))
                         's' -> builder.addSearchDomain(it[1])
-                        'd' -> builder.addDnsServer(it[1])
+                        'a' -> if( it[1].none{it == ':'} || forwardIpv6 ) {
+                                builder.addAddress(it[1], Integer.parseInt(it[2]))
+                            }
+                        'r' -> if( it[1].none{it == ':'} || forwardIpv6 ) {
+                                builder.addRoute(it[1], Integer.parseInt(it[2]))
+                            }
+                        'd' -> if(enableLocalDns) {
+                                builder.addDnsServer(it[1])
+                            }
                     }
                 }
 
+        if(!enableLocalDns) {
+            val dnsServers = Utils.getRemoteDnsServers(defaultDPreference)
+            for (dns in dnsServers) {
+                builder.addDnsServer(dns)
+            }
+        }
+
         builder.setSession(defaultDPreference.getPrefString(AppConfig.PREF_CURR_CONFIG_NAME, ""))
-        // val dnsServers = Utils.getRemoteDnsServers(defaultDPreference)
-        // for (dns in dnsServers) {
-        //     builder.addDnsServer(dns)
-        // }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP &&
                 defaultDPreference.getPrefBoolean(SettingsActivity.PREF_PER_APP_PROXY, false)) {
@@ -159,14 +170,6 @@ class V2RayVpnService : VpnService() {
         }
 
         v2rayPoint.vpnSupportReady()
-//        val localDns = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)
-//        if (localDns) {
-//            var assets = Utils.readTextFromAssets(v2RayApplication, "overture_config.json")
-//            if (!TextUtils.isEmpty(assets)) {
-//                assets = assets.replace("{datadir}", v2rayPoint.packageName)
-//                v2rayPoint.loadLocalDns(assets)
-//            }
-//        }
         if (v2rayPoint.isRunning) {
             MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_SUCCESS, "")
             showNotification()
@@ -298,21 +301,25 @@ class V2RayVpnService : VpnService() {
     private val vpnBandwidth: VpnBandwidth?
         get() {
             try {
-                val netDev = FileInputStream("/proc/net/dev").bufferedReader()
-                var bandWidth: VpnBandwidth? = null
-                val prefix = "tun0:"
-                while (true) {
-                    val line = netDev.readLine().trim()
-                    if (line.startsWith(prefix)) {
-                        val numbers = line.substring(prefix.length).split(' ')
-                                .filter(String::isNotEmpty)
-                                .map(String::toLong)
-                        if (numbers.size > 10)
-                            bandWidth = VpnBandwidth(numbers[0], numbers[8])
-                        break
-                    }
-                }
-                netDev.close()
+                // val netDev = FileInputStream("/proc/net/dev").bufferedReader()
+                // var bandWidth: VpnBandwidth? = null
+                // val prefix = "tun0:"
+                // while (true) {
+                //     val line = netDev.readLine().trim()
+                //     if (line.startsWith(prefix)) {
+                //         val numbers = line.substring(prefix.length).split(' ')
+                //                 .filter(String::isNotEmpty)
+                //                 .map(String::toLong)
+                //         if (numbers.size > 10)
+                //             bandWidth = VpnBandwidth(numbers[0], numbers[8])
+                //         break
+                //     }
+                // }
+                // netDev.close()
+
+                var uplink = v2rayPoint.queryStats("socks", "uplink")
+                var downlink = v2rayPoint.queryStats("socks", "downlink")
+                var bandWidth = VpnBandwidth(downlink, uplink)
                 return bandWidth
             } catch (e: Exception) {
                 e.printStackTrace()
