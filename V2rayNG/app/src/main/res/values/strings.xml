@@ -25,6 +25,7 @@
     <string name="menu_item_import_config_clipboard">Import config from Clipboard</string>
     <string name="menu_item_import_config_manually_vmess">Type manually[Vmess]</string>
     <string name="menu_item_import_config_manually_ss">Type manually[Shadowsocks]</string>
+    <string name="menu_item_import_config_manually_socks">Type manually[Socks]</string>
     <string name="menu_item_import_config_custom">custom config</string>
     <string name="menu_item_import_config_custom_clipboard">Import custom config from Clipboard</string>
     <string name="menu_item_import_config_custom_local">Import custom c from locally</string>
@@ -40,8 +41,8 @@
     <string name="server_lab_network">network</string>
     <string name="server_lab_more_function">more function</string>
     <string name="server_lab_head_type">head type</string>
-    <string name="server_lab_request_host">request host(host/ws host/h2 host)</string>
-    <string name="server_lab_path">path(ws path/h2 path)</string>
+    <string name="server_lab_request_host">request host(host/ws host/h2 host)/QUIC securty</string>
+    <string name="server_lab_path">path(ws path/h2 path)/QUIC key</string>
     <string name="server_lab_stream_security">tls</string>
     <string name="server_lab_allow_insecure">allowInsecure</string>
     <string name="server_lab_address3">address</string>
@@ -120,6 +121,7 @@
     <string name="toast_tg_app_not_found">Telegram app not found</string>
 
     <string name="title_pref_promotion">Promotion</string>
+    <string name="summary_pref_promotion">Promotion,click for details</string>
 
     <string name="title_pref_version">Version</string>
 
@@ -138,6 +140,7 @@
     <string name="sub_setting_remarks">remarks</string>
     <string name="sub_setting_url">url</string>
     <string name="title_sub_update">Update subscription</string>
+    <string name="title_ping_all_server">Ping all configuration</string>
 
     <string name="tasker_start_service">Start Service</string>
     <string name="tasker_setting_confirm">Confirm</string>
