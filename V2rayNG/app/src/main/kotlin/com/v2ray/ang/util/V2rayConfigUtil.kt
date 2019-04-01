@@ -4,23 +4,25 @@ import android.text.TextUtils
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonArray
 import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.AngConfig.VmessBean
 import com.v2ray.ang.dto.V2rayConfig
 import com.v2ray.ang.extension.defaultDPreference
 import com.v2ray.ang.ui.SettingsActivity
-import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import com.google.gson.JsonObject
 
 object V2rayConfigUtil {
-    private val requestObj: JSONObject by lazy {
-        JSONObject("""{"version":"1.1","method":"GET","path":["/"],"headers":{"User-Agent":["Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.75 Safari/537.36","Mozilla/5.0 (iPhone; CPU iPhone OS 10_0_2 like Mac OS X) AppleWebKit/601.1 (KHTML, like Gecko) CriOS/53.0.2785.109 Mobile/14A456 Safari/601.1.46"],"Accept-Encoding":["gzip, deflate"],"Connection":["keep-alive"],"Pragma":"no-cache"}}""")
+    private val requestObj: JsonObject by lazy {
+        Gson().fromJson("""{"version":"1.1","method":"GET","path":["/"],"headers":{"User-Agent":["Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.75 Safari/537.36","Mozilla/5.0 (iPhone; CPU iPhone OS 10_0_2 like Mac OS X) AppleWebKit/601.1 (KHTML, like Gecko) CriOS/53.0.2785.109 Mobile/14A456 Safari/601.1.46"],"Accept-Encoding":["gzip, deflate"],"Connection":["keep-alive"],"Pragma":"no-cache"}}""", JsonObject::class.java)
     }
-    private val responseObj: JSONObject by lazy {
-        JSONObject("""{"version":"1.1","status":"200","reason":"OK","headers":{"Content-Type":["application/octet-stream","video/mpeg"],"Transfer-Encoding":["chunked"],"Connection":["keep-alive"],"Pragma":"no-cache"}}""")
-    }
+
+//    private val responseObj: JSONObject by lazy {
+//        JSONObject("""{"version":"1.1","status":"200","reason":"OK","headers":{"Content-Type":["application/octet-stream","video/mpeg"],"Transfer-Encoding":["chunked"],"Connection":["keep-alive"],"Pragma":"no-cache"}}""")
+//    }
 
     data class Result(var status: Boolean, var content: String)
 
@@ -44,7 +46,7 @@ object V2rayConfigUtil {
                 result = getV2rayConfigType2(app, vmess)
             } else if (vmess.configType == AppConfig.EConfigType.Shadowsocks) {
                 result = getV2rayConfigType1(app, vmess)
-            }else if (vmess.configType == AppConfig.EConfigType.Socks) {
+            } else if (vmess.configType == AppConfig.EConfigType.Socks) {
                 result = getV2rayConfigType1(app, vmess)
             }
             Log.d("V2rayConfigUtilGoLog", result.content)
@@ -79,13 +81,13 @@ object V2rayConfigUtil {
 
             routing(vmess, v2rayConfig, app)
 
-            if(app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)) {
+            if (app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)) {
                 customLocalDns(vmess, v2rayConfig, app)
             } else {
                 customRemoteDns(vmess, v2rayConfig, app)
             }
 
-            val finalConfig =  GsonBuilder().setPrettyPrinting().create().toJson(v2rayConfig)
+            val finalConfig = GsonBuilder().setPrettyPrinting().create().toJson(v2rayConfig)
 
             result.status = true
             result.content = finalConfig
@@ -139,7 +141,7 @@ object V2rayConfigUtil {
 //                httpCopy.protocol = "http"
 //                v2rayConfig.inbounds.add(httpCopy)
 //            }
-            v2rayConfig.inbounds[0].sniffing.enabled = app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_SNIFFING_ENABLED, true)
+            v2rayConfig.inbounds[0].sniffing?.enabled = app.defaultDPreference.getPrefBoolean(SettingsActivity.PREF_SNIFFING_ENABLED, true)
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -300,19 +302,39 @@ object V2rayConfigUtil {
                         tcpSettings.header = V2rayConfig.OutboundBean.StreamSettingsBean.TcpsettingsBean.HeaderBean()
                         tcpSettings.header.type = vmess.headerType
 
-                        if (requestObj.has("headers")
-                                || requestObj.optJSONObject("headers").has("Pragma")) {
-                            val arrHost = JSONArray()
+//                        if (requestObj.has("headers")
+//                                || requestObj.optJSONObject("headers").has("Pragma")) {
+//                            val arrHost = ArrayList<String>()
+//                            vmess.requestHost
+//                                    .split(",")
+//                                    .forEach {
+//                                        arrHost.add(it)
+//                                    }
+//                            requestObj.optJSONObject("headers")
+//                                    .put("Host", arrHost)
+//
+//                        }
+                        if (!TextUtils.isEmpty(vmess.requestHost)) {
+                            val arrHost = ArrayList<String>()
                             vmess.requestHost
                                     .split(",")
                                     .forEach {
-                                        arrHost.put(it)
+                                        arrHost.add("\"$it\"")
                                     }
-                            requestObj.optJSONObject("headers")
-                                    .put("Host", arrHost)
-                            tcpSettings.header.request = requestObj
-                            tcpSettings.header.response = responseObj
+                            requestObj.getAsJsonObject("headers")
+                                    .add("Host", Gson().fromJson(arrHost.toString(), JsonArray::class.java))
                         }
+                        if (!TextUtils.isEmpty(vmess.path)) {
+                            val arrPath = ArrayList<String>()
+                            vmess.path
+                                    .split(",")
+                                    .forEach {
+                                        arrPath.add("\"$it\"")
+                                    }
+                            requestObj.add("path", Gson().fromJson(arrPath.toString(), JsonArray::class.java))
+                        }
+                        tcpSettings.header.request = requestObj
+                        //tcpSettings.header.response = responseObj
                         streamSettings.tcpSettings = tcpSettings
                     }
                 }
@@ -444,24 +466,26 @@ object V2rayConfigUtil {
         try {
             val hosts = mutableMapOf<String, String>()
             val servers = ArrayList<Any>()
-            val dns = Utils.getRemoteDnsServers(app.defaultDPreference)
-            dns.forEach {
+            val remoteDns = Utils.getRemoteDnsServers(app.defaultDPreference)
+            remoteDns.forEach {
                 servers.add(it)
             }
 
+            val domesticDns = Utils.getDomesticDnsServers(app.defaultDPreference)
+
             val agDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_AGENT, ""))
             if (agDomain.size > 0) {
-                servers.add(V2rayConfig.DnsBean.ServersBean(AppConfig.DNS_AGENT, 53, agDomain))
+                servers.add(V2rayConfig.DnsBean.ServersBean(remoteDns.first(), 53, agDomain))
             }
 
             val dirDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_DIRECT, ""))
             if (dirDomain.size > 0) {
-                servers.add(V2rayConfig.DnsBean.ServersBean(AppConfig.DNS_DIRECT, 53, dirDomain))
+                servers.add(V2rayConfig.DnsBean.ServersBean(domesticDns.first(), 53, dirDomain))
             }
 
             val routingMode = app.defaultDPreference.getPrefString(SettingsActivity.PREF_ROUTING_MODE, "0")
             if (routingMode == "2" || routingMode == "3") {
-                servers.add(V2rayConfig.DnsBean.ServersBean(AppConfig.DNS_DIRECT, 53, arrayListOf("geosite:cn")))
+                servers.add(V2rayConfig.DnsBean.ServersBean(domesticDns.first(), 53, arrayListOf("geosite:cn")))
             }
 
             val blkDomain = userRule2Domian(app.defaultDPreference.getPrefString(AppConfig.PREF_V2RAY_ROUTING_BLOCKED, ""))
@@ -472,39 +496,63 @@ object V2rayConfigUtil {
             // hardcode googleapi rule to fix play store problems
             hosts.put("domain:googleapis.cn", "googleapis.com")
 
+            // DNS dns对象
             v2rayConfig.dns = V2rayConfig.DnsBean(
                     servers = servers,
                     hosts = hosts)
 
-            // DNS outbound对象
-            if (v2rayConfig.outbounds.none { e -> e.protocol == "dns" && e.tag == "dns-out" }) {
-                val dnsOutbound = V2rayConfig.OutboundBean(
-                        protocol = "dns",
-                        tag = "dns-out",
-                        settings = null,
-                        streamSettings = null,
-                        mux = null)
+            // DNS inbound对象
+            if (v2rayConfig.inbounds.none { e -> e.protocol == "dokodemo-door" && e.tag == "dns-in" }) {
+                val dnsInboundSettings =  V2rayConfig.InboundBean.InSettingsBean(
+                    address = remoteDns.first(),
+                    port = 53,
+                    network = "tcp,udp")
 
-                v2rayConfig.outbounds.add(dnsOutbound)
+                v2rayConfig.inbounds.add(
+                    V2rayConfig.InboundBean(
+                        tag = "dns-in",
+                        port = 10807,
+                        listen = "127.0.0.1",
+                        protocol = "dokodemo-door",
+                        settings = dnsInboundSettings,
+                        sniffing = null))
             }
 
-            // DNS Reroute to v2ray inner DNS
-            val rdnsRule = V2rayConfig.RoutingBean.RulesBean(
-                    type = "field",
-                    outboundTag = "dns-out",
-                    port = "53",
-                    ip = arrayListOf<String>("26.26.26.2"),
-                    domain = null)
+            // DNS outbound对象
+            if (v2rayConfig.outbounds.none { e -> e.protocol == "dns" && e.tag == "dns-out" }) {
+                v2rayConfig.outbounds.add(
+                    V2rayConfig.OutboundBean(
+                            protocol = "dns",
+                            tag = "dns-out",
+                            settings = null,
+                            streamSettings = null,
+                            mux = null))
+            }
 
-            val ldnsRule = V2rayConfig.RoutingBean.RulesBean(
+            // DNS routing 
+            v2rayConfig.routing.rules.add(0, V2rayConfig.RoutingBean.RulesBean(
                     type = "field",
                     outboundTag = AppConfig.TAG_DIRECT,
                     port = "53",
-                    ip = arrayListOf<String>(AppConfig.DNS_DIRECT),
+                    ip = domesticDns,
                     domain = null)
+            )
 
-            v2rayConfig.routing.rules.add(0, ldnsRule)
-            v2rayConfig.routing.rules.add(0, rdnsRule)
+            v2rayConfig.routing.rules.add(0, V2rayConfig.RoutingBean.RulesBean(
+                    type = "field",
+                    outboundTag = AppConfig.TAG_AGENT,
+                    port = "53",
+                    ip = remoteDns,
+                    domain = null)
+            )
+
+            // DNS routing tag
+            v2rayConfig.routing.rules.add(0, V2rayConfig.RoutingBean.RulesBean(
+                    type = "field",
+                    inboundTag = arrayListOf<String>("dns-in"),
+                    outboundTag = "dns-out",
+                    domain = null)
+            )
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -530,6 +578,7 @@ object V2rayConfigUtil {
         }
         return true
     }
+
     /**
      * is valid config
      */
