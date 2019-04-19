@@ -11,8 +11,8 @@ android {
         minSdkVersion 17
         targetSdkVersion Integer.parseInt("$targetSdkVer")
         multiDexEnabled true
-        versionCode 184
-        versionName "0.6.18"
+        versionCode 188
+        versionName "0.6.19"
     }
 
     signingConfigs {
@@ -78,6 +78,7 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     implementation project(':dpreference')
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+    implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion"
     // Android support library
     implementation "com.android.support:support-v4:$supportLibVersion"
     implementation "com.android.support:appcompat-v7:$supportLibVersion"
