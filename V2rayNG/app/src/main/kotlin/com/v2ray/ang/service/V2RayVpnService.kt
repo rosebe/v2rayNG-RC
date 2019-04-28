@@ -15,30 +15,25 @@ import android.net.VpnService
 import android.os.*
 import android.support.annotation.RequiresApi
 import android.support.v4.app.NotificationCompat
-import android.text.TextUtils
-import android.util.Log
-import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.VpnBandwidth
 import com.v2ray.ang.extension.defaultDPreference
 import com.v2ray.ang.extension.toSpeedString
-import com.v2ray.ang.extension.v2RayApplication
 import com.v2ray.ang.ui.MainActivity
 import com.v2ray.ang.ui.PerAppProxyActivity
 import com.v2ray.ang.ui.SettingsActivity
 import com.v2ray.ang.util.MessageUtil
 import com.v2ray.ang.util.Utils
 import libv2ray.Libv2ray
-import libv2ray.V2RayCallbacks
 import libv2ray.V2RayVPNServiceSupportsSet
 import rx.Observable
 import rx.Subscription
+import java.net.InetAddress
 import java.io.FileInputStream
 import java.lang.ref.SoftReference
 import android.os.Build
 import android.annotation.TargetApi
-import android.support.v4.os.BuildCompat
 
 class V2RayVpnService : VpnService() {
     companion object {
@@ -77,6 +72,7 @@ class V2RayVpnService : VpnService() {
         *
         * Source: https://android.googlesource.com/platform/frameworks/base/+/2df4c7d/services/core/java/com/android/server/ConnectivityService.java#887
         */
+    @TargetApi(28)
     private val defaultNetworkRequest = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
@@ -84,7 +80,7 @@ class V2RayVpnService : VpnService() {
 
 
     private val connectivity by lazy { getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager }
-    @TargetApi(Build.VERSION_CODES.P)
+    @TargetApi(28)
     private val defaultNetworkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             setUnderlyingNetworks(arrayOf(network))
@@ -118,6 +114,12 @@ class V2RayVpnService : VpnService() {
     }
 
     fun setup(parameters: String) {
+
+        val prepare = VpnService.prepare(this)
+        if (prepare != null) {
+            return
+        }
+
         // If the old interface has exactly the same parameters, use it!
         // Configure a builder while parsing the parameters.
         val builder = Builder()
@@ -167,7 +169,7 @@ class V2RayVpnService : VpnService() {
         }
 
 
-        if (BuildCompat.isAtLeastP()) {
+        if (Build.VERSION.SDK_INT >= 28) {
             connectivity.requestNetwork(defaultNetworkRequest, defaultNetworkCallback)
             listeningForDefaultNetwork = true
         }
@@ -192,29 +194,17 @@ class V2RayVpnService : VpnService() {
         }
     }
 
+    fun shutdown() {
+        try {
+            mInterface.close()
+        } catch (ignored: Exception) {
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startV2ray()
         return START_STICKY
         //return super.onStartCommand(intent, flags, startId)
-    }
-
-    private fun vpnCheckIsReady() {
-        val prepare = VpnService.prepare(this)
-
-        if (prepare != null) {
-            return
-        }
-        val enableLocalDns = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)
-        val forwardIpv6 = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_FORWARD_IPV6, false)
-
-        v2rayPoint.vpnSupportReady(enableLocalDns, forwardIpv6)
-        if (v2rayPoint.isRunning) {
-            MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_SUCCESS, "")
-            showNotification()
-        } else {
-            MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_FAILURE, "")
-            cancelNotification()
-        }
     }
 
     private fun startV2ray() {
@@ -225,18 +215,25 @@ class V2RayVpnService : VpnService() {
             } catch (e: Exception) {
             }
 
-            val domainName = defaultDPreference.getPrefString(AppConfig.PREF_CURR_CONFIG_DOMAIN, "")
             configContent = defaultDPreference.getPrefString(AppConfig.PREF_CURR_CONFIG, "")
-
-            v2rayPoint.callbacks = v2rayCallback
-            v2rayPoint.setVpnSupportSet(v2rayCallback)
-
+            v2rayPoint.supportSet = v2rayCallback
             v2rayPoint.configureFileContent = configContent
-            v2rayPoint.domainName = domainName
+            v2rayPoint.enableLocalDNS = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_LOCAL_DNS_ENABLED, false)
+            v2rayPoint.forwardIpv6 = defaultDPreference.getPrefBoolean(SettingsActivity.PREF_FORWARD_IPV6, false)
+            v2rayPoint.domainName = defaultDPreference.getPrefString(AppConfig.PREF_CURR_CONFIG_DOMAIN, "")
+
             try {
                 v2rayPoint.runLoop()
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+
+            if (v2rayPoint.isRunning) {
+                MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_SUCCESS, "")
+                showNotification()
+            } else {
+                MessageUtil.sendMsg2UI(this, AppConfig.MSG_STATE_START_FAILURE, "")
+                cancelNotification()
             }
         }
         //        showNotification()
@@ -247,11 +244,12 @@ class V2RayVpnService : VpnService() {
 //        val emptyInfo = VpnNetworkInfo()
 //        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)
 //        saveVpnNetworkInfo(configName, info)
-        if (BuildCompat.isAtLeastP() && listeningForDefaultNetwork) {
-            connectivity.unregisterNetworkCallback(defaultNetworkCallback)
-            listeningForDefaultNetwork = false
+        if (Build.VERSION.SDK_INT >= 28) {
+            if (listeningForDefaultNetwork) {
+                connectivity.unregisterNetworkCallback(defaultNetworkCallback)
+                listeningForDefaultNetwork = false
+            }
         }
-
         if (v2rayPoint.isRunning) {
             try {
                 v2rayPoint.stopLoop()
@@ -268,6 +266,11 @@ class V2RayVpnService : VpnService() {
                 unregisterReceiver(mMsgReceive)
             } catch (e: Exception) {
             }
+            try {
+                mInterface.close()
+            } catch (ignored: Exception) {
+            }
+
             stopSelf()
         }
     }
@@ -367,9 +370,9 @@ class V2RayVpnService : VpnService() {
                 // }
                 // netDev.close()
 
-                var uplink = v2rayPoint.queryStats("socks", "uplink")
-                var downlink = v2rayPoint.queryStats("socks", "downlink")
-                var bandWidth = VpnBandwidth(downlink, uplink)
+                val uplink = v2rayPoint.queryStats("socks", "uplink")
+                val downlink = v2rayPoint.queryStats("socks", "downlink")
+                val bandWidth = VpnBandwidth(downlink, uplink)
                 return bandWidth
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -378,14 +381,21 @@ class V2RayVpnService : VpnService() {
         }
 
 
-    private inner class V2RayCallback : V2RayCallbacks, V2RayVPNServiceSupportsSet {
-        override fun shutdown() = 0L
+    private inner class V2RayCallback : V2RayVPNServiceSupportsSet {
+        override fun shutdown(): Long {
+            try {
+                this@V2RayVpnService.shutdown()
+                return 0
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return -1
+            }
+        }
 
         override fun getVPNFd() = this@V2RayVpnService.fd.toLong()
 
         override fun prepare(): Long {
-            vpnCheckIsReady()
-            return 1
+            return 0
         }
 
         override fun protect(l: Long) = (if (this@V2RayVpnService.protect(l.toInt())) 0 else 1).toLong()
