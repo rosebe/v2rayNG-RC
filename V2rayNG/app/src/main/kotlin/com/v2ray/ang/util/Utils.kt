@@ -41,6 +41,7 @@ import java.net.*
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 import java.math.BigInteger
+import java.util.concurrent.TimeUnit
 import libv2ray.Libv2ray
 
 
@@ -313,11 +314,14 @@ object Utils {
         context.toast(R.string.toast_services_start)
         if (AngConfigManager.genStoreV2rayConfig(-1)) {
             val configContent = AngConfigManager.currGeneratedV2rayConfig()
-            try {
-                Libv2ray.testConfig(configContent)
-            } catch (e: Exception) {
-                context.toast(e.toString())
-                return false
+            val configType = AngConfigManager.currConfigType()
+            if (configType == AppConfig.EConfigType.Custom) {
+                try {
+                    Libv2ray.testConfig(configContent)
+                } catch (e: Exception) {
+                    context.toast(e.toString())
+                    return false
+                }
             }
             V2RayVpnService.startV2Ray(context)
             return true
@@ -385,9 +389,6 @@ object Utils {
         }
     }
 
-    /**
-     * Based on: https://android.googlesource.com/platform/frameworks/base/+/b19a838/services/core/java/com/android/server/connectivity/NetworkMonitor.java#1071
-     */
     fun testConnection(context: Context, port: Int): String {
         var result: String
         var conn: HttpURLConnection? = null
@@ -396,20 +397,15 @@ object Utils {
             val url = URL("https",
                     "www.google.com",
                     "/generate_204")
-//        Log.d("testConnection", "222222222222")
 
-            conn = url.openConnection(Proxy(Proxy.Type.SOCKS,
-                    InetSocketAddress("localhost", port)))
-                    as HttpURLConnection
-//        Log.d("testConnection", "333333333333")
-
+            conn = url.openConnection(
+                Proxy(Proxy.Type.HTTP,
+                InetSocketAddress("127.0.0.1", port + 1))) as HttpURLConnection
             conn.connectTimeout = 30000
             conn.readTimeout = 30000
             conn.setRequestProperty("Connection", "close")
             conn.instanceFollowRedirects = false
             conn.useCaches = false
-//        Log.d("testConnection", "444444444444")
-
 
             val start = SystemClock.elapsedRealtime()
             val code = conn.responseCode
@@ -421,8 +417,12 @@ object Utils {
                 throw IOException(context.getString(R.string.connection_test_error_status_code, code))
             }
         } catch (e: IOException) {
+            // network exception
+            Log.d(AppConfig.ANG_PACKAGE,"testConnection IOException: "+Log.getStackTraceString(e))
             result = context.getString(R.string.connection_test_error, e.message)
         } catch (e: Exception) {
+            // library exception, eg sumsung
+            Log.d(AppConfig.ANG_PACKAGE,"testConnection Exception: "+Log.getStackTraceString(e))
             result = context.getString(R.string.connection_test_error, e.message)
         } finally {
             conn?.disconnect()

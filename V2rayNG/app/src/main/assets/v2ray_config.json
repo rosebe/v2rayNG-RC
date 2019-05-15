@@ -7,7 +7,7 @@
       "levels": {
         "8": {
           "handshake": 4,
-          "connIdle": 60,
+          "connIdle": 300,
           "uplinkOnly": 1,
           "downlinkOnly": 1
         }
@@ -33,7 +33,16 @@
         "tls"
       ]
     }
-  }],
+  },
+  {
+    "tag": "http",
+    "port": 10809,
+    "protocol": "http",
+    "settings": {
+      "userLevel": 8
+    }
+  }
+],
   "outbounds": [{
     "tag": "proxy",
     "protocol": "vmess",
